@@ -2,16 +2,14 @@
 
 extern crate time;
 
-use std::os::{homedir, args};
 use std::io::{File, SeekStyle, FileMode, FileAccess, USER_RWX, BufferedReader};
 use std::io::fs::{unlink, PathExtensions, mkdir};
-use time::{now_utc, Tm, empty_tm, strptime};
+use std::os::{homedir, args};
 use std::time::Duration;
-use std::io::BufferPrelude;
+use time::{now_utc, Tm, empty_tm, strptime};
 
 fn main() {
-    let args = args();
-    match args.get(1) {
+    match args().get(1) {
         None => panic!("No command given"),
         Some(command) => {
             let mut time_clock = TimeClock::new();
@@ -19,14 +17,12 @@ fn main() {
                 "in" => time_clock.punch_in(),
                 "out" => time_clock.punch_out(),
                 "status" => time_clock.status(),
-                "report" => time_clock.print_by_days(),
+                "report" => time_clock.report_daily_hours(),
                 _ => panic!("unknown command")
             }
         }
     }
 }
-
-
 
 struct TimeClock {
     now: Tm,
@@ -56,6 +52,8 @@ impl TimeClock {
         }
     }
 
+    // commands
+
     fn punch_in(&mut self) {
         if self.currently_working {
             panic!("You're already working");
@@ -74,17 +72,15 @@ impl TimeClock {
         self.set_current_working_state(false);
     }
 
-
-    fn set_current_working_state(&mut self, currently_working: bool) {
-        self.currently_working = currently_working;
-        if currently_working {
-            File::create(&self.state_path).unwrap();
+    fn status(&self) {
+        if self.currently_working {
+            println!("You're punched in")
         } else {
-            unlink(&self.state_path).unwrap();
+            println!("You're punched out")
         }
     }
 
-    fn print_by_days(&mut self) {
+    fn report_daily_hours(&mut self) {
         self.timesheet.seek(0, SeekStyle::SeekSet).unwrap();
         let mut buf = BufferedReader::new(File::open(self.timesheet.path()));
         let mut starting_time: Option<Tm> = None;
@@ -126,11 +122,14 @@ impl TimeClock {
         }
     }
 
-    fn status(&self) {
-        if self.currently_working {
-            println!("You're punched in")
+    // aux. methods
+
+    fn set_current_working_state(&mut self, currently_working: bool) {
+        self.currently_working = currently_working;
+        if currently_working {
+            File::create(&self.state_path).unwrap();
         } else {
-            println!("You're punched out")
+            unlink(&self.state_path).unwrap();
         }
     }
 }
