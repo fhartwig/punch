@@ -2,7 +2,8 @@
 
 extern crate time;
 
-use std::io::{File, SeekStyle, FileMode, FileAccess, USER_RWX, BufferedReader};
+use std::io::{File, SeekStyle, FileMode, FileAccess, USER_RWX, BufferedReader,
+    Lines};
 use std::io::fs::{unlink, PathExtensions, mkdir};
 use std::os::{homedir, args};
 use std::time::Duration;
@@ -82,43 +83,26 @@ impl TimeClock {
 
     fn report_daily_hours(&mut self) {
         self.timesheet.seek(0, SeekStyle::SeekSet).unwrap();
-        let mut buf = BufferedReader::new(File::open(self.timesheet.path()));
-        let mut starting_time: Option<Tm> = None;
+        let mut buf =
+            BufferedReader::new(File::open(self.timesheet.path()).unwrap());
         let mut current_day = empty_tm();
         let mut time_worked_today = Duration::zero();
-        for l in buf.lines() {
-            // lines should alternate between starting with "in: " and "out: "
-            let line = l.unwrap();
-            if let Some(start) = starting_time {
-                if !line.starts_with("out: ") {
-                    panic!("Bad data in timesheet!");
+
+        let mut intervals = IntervalIter::from_lines(buf.lines());
+        for (start, end) in intervals {
+            if !same_day(&start, &current_day) {
+                if !time_worked_today.is_zero() {
+                    print_time_worked(&time_worked_today, &current_day);
                 }
-                let time_str = &line[5..];
-                let end_time = parse_time(time_str);
-                let time_passed = end_time.to_timespec() - start.to_timespec();
-                time_worked_today = time_worked_today + time_passed;
-                if !same_day(&current_day, &start) {
-                    if time_worked_today > Duration::days(1) {
-                        panic!("Worked more than 24 hours in a day!");
-                    }
-                    if !time_worked_today.is_zero() {
-                        println!("{}: {}:{}",
-                            start.strftime("%a, %d %b %Y").unwrap(),
-                            time_worked_today.num_hours() ,
-                            time_worked_today.num_minutes() % 60
-                        );
-                    }
-                    current_day = start;
-                }
-                starting_time = None;
-            } else {
-                if !line.starts_with("in: ") {
-                    panic!("Bad data in timesheet!");
-                }
-                let time_str = &line[4..];
-                let t = parse_time(time_str);
-                starting_time = Some(t);
+                current_day = start;
+                time_worked_today = Duration::zero();
             }
+            time_worked_today =
+                time_worked_today + (end.to_timespec() - start.to_timespec());
+        }
+
+        if !time_worked_today.is_zero() {
+            print_time_worked(&time_worked_today, &current_day);
         }
     }
 
@@ -134,10 +118,61 @@ impl TimeClock {
     }
 }
 
+struct IntervalIter<'a> {
+    lines: Lines<'a, BufferedReader<File>>
+}
+
+impl <'a> IntervalIter<'a> {
+    fn from_lines(lines: Lines<'a, BufferedReader<File>>) -> IntervalIter<'a> {
+        IntervalIter {lines: lines}
+    }
+}
+
+impl <'a> Iterator for IntervalIter<'a> {
+    type Item = (Tm, Tm);
+    fn next(&mut self) -> Option<(Tm, Tm)> {
+        match (self.lines.next(), self.lines.next()) {
+            (None, None) => None,
+            (Some(Ok(start_line)), o_end_line) => {
+                if !start_line.starts_with("in: ") {
+                    panic!("Bad data in timesheet!");
+                }
+                let start = parse_time(&start_line[4..]);
+                let end = match o_end_line {
+                    None => now_utc(),
+                    Some(Ok(end_line)) => {
+                        if !end_line.starts_with("out: ") {
+                            panic!("Bad data in timesheet!");
+                        }
+                        parse_time(&end_line[5..])
+                    },
+                    Some(Err(_)) => panic!("Weird IO error")
+                };
+                Some((start, end))
+            },
+            _ => panic!("Weird IO error")
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, None)
+    }
+}
+
 fn parse_time(s: &str) -> Tm {
     strptime(s.slice_to(s.len() - 1), "%a, %d %b %Y %T %Z").unwrap()
 }
 
 fn same_day(t1: &Tm, t2: &Tm) -> bool {
-    t1.tm_year == t2.tm_year && t1.tm_yday == t2.tm_yday
+    t1.tm_year == t2.tm_year &&
+    t1.tm_mon == t2.tm_mon &&
+    t1.tm_mday == t2.tm_mday
+}
+
+fn print_time_worked(t: &Duration, day: &Tm) {
+    println!("{}: {}:{}",
+        day.strftime("%a, %d %b %Y").unwrap(),
+        t.num_hours() ,
+        t.num_minutes() % 60
+    );
 }
