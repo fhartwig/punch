@@ -5,13 +5,14 @@ extern crate time;
 use std::io::{File, SeekStyle, FileMode, FileAccess, USER_RWX, BufferedReader,
     Lines};
 use std::io::fs::{unlink, PathExtensions, mkdir};
-use std::os::{homedir, args};
+use std::os::{homedir, args, set_exit_status};
+use std::fmt;
 use std::time::Duration;
 use time::{now_utc, Tm, empty_tm, strptime};
 
 fn main() {
-    match args().get(1) {
-        None => panic!("No command given"),
+    let result = match args().get(1) {
+        None => Err(PunchClockError::NoCommandGiven),
         Some(command) => {
             let mut time_clock = TimeClock::new();
             match &command[] {
@@ -19,11 +20,43 @@ fn main() {
                 "out" => time_clock.punch_out(),
                 "status" => time_clock.status(),
                 "report" => time_clock.report_daily_hours(),
-                _ => panic!("unknown command")
+                _ => Err(PunchClockError::UnknownCommand)
             }
         }
+    };
+
+    if let Err(e) = result {
+        println!("Error: {}", e);
+        set_exit_status(1);
     }
 }
+
+enum PunchClockError {
+    NoCommandGiven,
+    UnknownCommand,
+    AlreadyPunchedIn,
+    AlreadyPunchedOut,
+    CorruptedTimeSheet,
+    IoError(std::io::IoError),
+}
+
+impl fmt::String for PunchClockError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        use PunchClockError::*;
+        fmt.write_str(
+            match *self {
+                NoCommandGiven => "No command given",
+                UnknownCommand => "Unknown command",
+                AlreadyPunchedIn => "You are already punched in",
+                AlreadyPunchedOut => "You're not currently punched in",
+                CorruptedTimeSheet => "Bad data in timesheet",
+                IoError(_) => "IO error"
+            }
+        )
+    }
+}
+
+type PunchClockResult<T> = Result<T, PunchClockError>;
 
 struct TimeClock {
     now: Tm,
@@ -55,33 +88,36 @@ impl TimeClock {
 
     // commands
 
-    fn punch_in(&mut self) {
+    fn punch_in(&mut self) -> PunchClockResult<()> {
         if self.currently_working {
-            panic!("You're already working");
+            return Err(PunchClockError::AlreadyPunchedIn);
         }
         self.timesheet.seek(0, SeekStyle::SeekEnd).unwrap();
         writeln!(&mut self.timesheet, "in: {}", self.now.rfc822()).unwrap();
         self.set_current_working_state(true);
+        Ok(())
     }
 
-    fn punch_out(&mut self) {
+    fn punch_out(&mut self) -> PunchClockResult<()> {
         if !self.currently_working {
-            panic!("Can't punch out if you're not working!");
+            return Err(PunchClockError::AlreadyPunchedOut);
         }
         self.timesheet.seek(0, SeekStyle::SeekEnd).unwrap();
         writeln!(&mut self.timesheet, "out: {}", self.now.rfc822()).unwrap();
         self.set_current_working_state(false);
+        Ok(())
     }
 
-    fn status(&self) {
+    fn status(&self) -> PunchClockResult<()> {
         if self.currently_working {
-            println!("You're punched in")
+            println!("You're punched in");
         } else {
-            println!("You're punched out")
+            println!("You're punched out");
         }
+        Ok(())
     }
 
-    fn report_daily_hours(&mut self) {
+    fn report_daily_hours(&mut self) -> PunchClockResult<()> {
         self.timesheet.seek(0, SeekStyle::SeekSet).unwrap();
         let mut buf =
             BufferedReader::new(File::open(self.timesheet.path()).unwrap());
@@ -89,7 +125,8 @@ impl TimeClock {
         let mut time_worked_today = Duration::zero();
 
         let mut intervals = IntervalIter::from_lines(buf.lines());
-        for (start, end) in intervals {
+        for interval in intervals {
+            let (start, end) = try!(interval);
             if !same_day(&start, &current_day) {
                 if !time_worked_today.is_zero() {
                     print_time_worked(&time_worked_today, &current_day);
@@ -104,6 +141,7 @@ impl TimeClock {
         if !time_worked_today.is_zero() {
             print_time_worked(&time_worked_today, &current_day);
         }
+        Ok(())
     }
 
     // aux. methods
@@ -129,28 +167,47 @@ impl <'a> IntervalIter<'a> {
 }
 
 impl <'a> Iterator for IntervalIter<'a> {
-    type Item = (Tm, Tm);
-    fn next(&mut self) -> Option<(Tm, Tm)> {
-        match (self.lines.next(), self.lines.next()) {
+    type Item = PunchClockResult<(Tm, Tm)>;
+    fn next(&mut self) -> Option<PunchClockResult<(Tm, Tm)>> {
+
+        // helper function to make error handling a bit nicer
+        fn inner_unwrap<T>(x: Option<std::io::IoResult<T>>)
+                -> PunchClockResult<Option<T>> {
+            match x {
+                None => Ok(None),
+                Some(Ok(inner)) => Ok(Some(inner)),
+                Some(Err(e)) => Err(PunchClockError::IoError(e))
+            }
+        }
+
+        let line_1 = match inner_unwrap(self.lines.next()) {
+            Ok(l) => l,
+            Err(e) => return Some(Err(e))
+        };
+        let line_2 = match inner_unwrap(self.lines.next()) {
+            Ok(l) => l,
+            Err(e) => return Some(Err(e))
+        };
+
+        match (line_1, line_2) {
             (None, None) => None,
-            (Some(Ok(start_line)), o_end_line) => {
+            (Some(start_line), o_end_line) => {
                 if !start_line.starts_with("in: ") {
-                    panic!("Bad data in timesheet!");
+                    return Some(Err(PunchClockError::CorruptedTimeSheet));
                 }
                 let start = parse_time(&start_line[4..]);
                 let end = match o_end_line {
                     None => now_utc(),
-                    Some(Ok(end_line)) => {
+                    Some(end_line) => {
                         if !end_line.starts_with("out: ") {
-                            panic!("Bad data in timesheet!");
+                            return Some(Err(PunchClockError::CorruptedTimeSheet));
                         }
                         parse_time(&end_line[5..])
                     },
-                    Some(Err(_)) => panic!("Weird IO error")
                 };
-                Some((start, end))
+                Some(Ok((start, end)))
             },
-            _ => panic!("Weird IO error")
+            _ => unreachable!() // (None, Some(l)) should not happen
         }
     }
 
