@@ -1,10 +1,10 @@
-#![allow(unstable)]
+#![feature(core, io, std_misc, path, os)]
 
 extern crate time;
 
-use std::io::{File, SeekStyle, FileMode, FileAccess, USER_RWX, BufferedReader,
-    Lines};
-use std::io::fs::{unlink, PathExtensions, mkdir};
+use std::old_io::{File, SeekStyle, FileMode, FileAccess, USER_RWX,
+    BufferedReader, Lines, IoResult};
+use std::old_io::fs::{unlink, PathExtensions, mkdir};
 use std::os::{homedir, args, set_exit_status};
 use std::fmt;
 use std::time::Duration;
@@ -37,10 +37,10 @@ enum PunchClockError {
     AlreadyPunchedIn,
     AlreadyPunchedOut,
     CorruptedTimeSheet,
-    IoError(std::io::IoError),
+    IoError(std::old_io::IoError),
 }
 
-impl fmt::String for PunchClockError {
+impl fmt::Display for PunchClockError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         use PunchClockError::*;
         fmt.write_str(
@@ -171,7 +171,7 @@ impl <'a> Iterator for IntervalIter<'a> {
     fn next(&mut self) -> Option<PunchClockResult<(Tm, Tm)>> {
 
         // helper function to make error handling a bit nicer
-        fn inner_unwrap<T>(x: Option<std::io::IoResult<T>>)
+        fn inner_unwrap<T>(x: Option<IoResult<T>>)
                 -> PunchClockResult<Option<T>> {
             match x {
                 None => Ok(None),
@@ -217,7 +217,7 @@ impl <'a> Iterator for IntervalIter<'a> {
 }
 
 fn parse_time(s: &str) -> Tm {
-    strptime(s.slice_to(s.len() - 1), "%a, %d %b %Y %T %Z").unwrap()
+    strptime(&s[..s.len() - 1], "%a, %d %b %Y %T %Z").unwrap()
 }
 
 fn same_day(t1: &Tm, t2: &Tm) -> bool {
