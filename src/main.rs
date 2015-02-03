@@ -227,7 +227,7 @@ fn same_day(t1: &Tm, t2: &Tm) -> bool {
 }
 
 fn print_time_worked(t: &Duration, day: &Tm) {
-    println!("{}: {}:{}",
+    println!("{}: {}:{:02}",
         day.strftime("%a, %d %b %Y").unwrap(),
         t.num_hours() ,
         t.num_minutes() % 60
