@@ -124,8 +124,7 @@ impl TimeClock {
         let mut current_day = empty_tm();
         let mut time_worked_today = Duration::zero();
 
-        let mut intervals = IntervalIter::from_lines(buf.lines());
-        for interval in intervals {
+        for interval in IntervalIter::from_lines(buf.lines()) {
             let (start, end) = try!(interval);
             if !same_day(&start, &current_day) {
                 if !time_worked_today.is_zero() {
