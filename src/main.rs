@@ -1,17 +1,17 @@
-#![feature(core, io, std_misc, path, os)]
+#![feature(core, io, std_misc, path, env)]
 
 extern crate time;
 
 use std::old_io::{File, SeekStyle, FileMode, FileAccess, USER_RWX,
     BufferedReader, Lines, IoResult};
 use std::old_io::fs::{unlink, PathExtensions, mkdir};
-use std::os::{homedir, args, set_exit_status};
+use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
 use std::time::Duration;
 use time::{now_utc, Tm, empty_tm, strptime};
 
 fn main() {
-    let result = match args().get(1) {
+    let result = match args().nth(1) {
         None => Err(PunchClockError::NoCommandGiven),
         Some(command) => {
             let mut time_clock = TimeClock::new();
@@ -68,7 +68,7 @@ struct TimeClock {
 impl TimeClock {
     fn new() -> TimeClock {
         let now = now_utc();
-        let home = homedir().unwrap();
+        let home = home_dir().unwrap();
         let base_dir = home.join(Path::new(".punch"));
         let timesheet_path = base_dir.join("timesheet");
         let working_state_path = base_dir.join("state");
