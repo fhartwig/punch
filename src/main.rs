@@ -1,10 +1,11 @@
-#![feature(core, io, std_misc, path, env)]
+#![feature(core, io, fs, std_misc, path, env)]
 
 extern crate time;
 
-use std::old_io::{File, SeekStyle, FileMode, FileAccess, USER_RWX,
-    BufferedReader, Lines, IoResult};
-use std::old_io::fs::{unlink, PathExtensions, mkdir};
+use std::fs::{File, create_dir, OpenOptions};
+use std::io::{Seek, SeekFrom, BufReader, BufReadExt, Lines, Write};
+use std::io;
+use std::old_io::fs::{unlink, PathExtensions};
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
 use std::time::Duration;
@@ -37,7 +38,7 @@ enum PunchClockError {
     AlreadyPunchedIn,
     AlreadyPunchedOut,
     CorruptedTimeSheet,
-    IoError(std::old_io::IoError),
+    IoError(io::Error),
 }
 
 impl fmt::Display for PunchClockError {
@@ -73,11 +74,11 @@ impl TimeClock {
         let timesheet_path = base_dir.join("timesheet");
         let working_state_path = base_dir.join("state");
         if !base_dir.exists() {
-            mkdir(&base_dir, USER_RWX).unwrap();
+            create_dir(&base_dir).unwrap();
         }
-        let timesheet = File::open_mode(&timesheet_path,
-                                            FileMode::Append,
-                                            FileAccess::Write).unwrap();
+        let mut open_opts = OpenOptions::new();
+        open_opts.write(true).append(true);
+        let timesheet = open_opts.open(&timesheet_path).unwrap();
         TimeClock {
             timesheet: timesheet,
             currently_working: working_state_path.exists(),
@@ -92,7 +93,7 @@ impl TimeClock {
         if self.currently_working {
             return Err(PunchClockError::AlreadyPunchedIn);
         }
-        self.timesheet.seek(0, SeekStyle::SeekEnd).unwrap();
+        self.timesheet.seek(SeekFrom::End(0)).unwrap();
         writeln!(&mut self.timesheet, "in: {}", self.now.rfc822()).unwrap();
         self.set_current_working_state(true);
         Ok(())
@@ -102,7 +103,7 @@ impl TimeClock {
         if !self.currently_working {
             return Err(PunchClockError::AlreadyPunchedOut);
         }
-        self.timesheet.seek(0, SeekStyle::SeekEnd).unwrap();
+        self.timesheet.seek(SeekFrom::End(0)).unwrap();
         writeln!(&mut self.timesheet, "out: {}", self.now.rfc822()).unwrap();
         self.set_current_working_state(false);
         Ok(())
@@ -118,9 +119,9 @@ impl TimeClock {
     }
 
     fn report_daily_hours(&mut self) -> PunchClockResult<()> {
-        self.timesheet.seek(0, SeekStyle::SeekSet).unwrap();
-        let mut buf =
-            BufferedReader::new(File::open(self.timesheet.path()).unwrap());
+        self.timesheet.seek(SeekFrom::Start(0)).unwrap();
+        let buf =
+            BufReader::new(File::open(self.timesheet.path().unwrap()).unwrap());
         let mut current_day = empty_tm();
         let mut time_worked_today = Duration::zero();
 
@@ -155,22 +156,22 @@ impl TimeClock {
     }
 }
 
-struct IntervalIter<'a> {
-    lines: Lines<'a, BufferedReader<File>>
+struct IntervalIter {
+    lines: Lines<BufReader<File>>
 }
 
-impl <'a> IntervalIter<'a> {
-    fn from_lines(lines: Lines<'a, BufferedReader<File>>) -> IntervalIter<'a> {
+impl IntervalIter {
+    fn from_lines(lines: Lines<BufReader<File>>) -> IntervalIter {
         IntervalIter {lines: lines}
     }
 }
 
-impl <'a> Iterator for IntervalIter<'a> {
+impl Iterator for IntervalIter {
     type Item = PunchClockResult<(Tm, Tm)>;
     fn next(&mut self) -> Option<PunchClockResult<(Tm, Tm)>> {
 
         // helper function to make error handling a bit nicer
-        fn inner_unwrap<T>(x: Option<IoResult<T>>)
+        fn inner_unwrap<T>(x: Option<io::Result<T>>)
                 -> PunchClockResult<Option<T>> {
             match x {
                 None => Ok(None),
