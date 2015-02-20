@@ -1,11 +1,11 @@
-#![feature(core, io, fs, std_misc, path, env)]
+#![feature(io, fs, std_misc, old_io, old_path, env)]
 
 extern crate time;
 
-use std::fs::{File, create_dir, OpenOptions};
+use std::fs::{File, create_dir, OpenOptions, remove_file};
 use std::io::{Seek, SeekFrom, BufReader, BufReadExt, Lines, Write};
 use std::io;
-use std::old_io::fs::{unlink, PathExtensions};
+use std::old_io::fs::{PathExtensions};
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
 use std::time::Duration;
@@ -16,7 +16,7 @@ fn main() {
         None => Err(PunchClockError::NoCommandGiven),
         Some(command) => {
             let mut time_clock = TimeClock::new();
-            match &command[] {
+            match &command[..] {
                 "in" => time_clock.punch_in(),
                 "out" => time_clock.punch_out(),
                 "status" => time_clock.status(),
@@ -151,7 +151,7 @@ impl TimeClock {
         if currently_working {
             File::create(&self.state_path).unwrap();
         } else {
-            unlink(&self.state_path).unwrap();
+            remove_file(&self.state_path).unwrap();
         }
     }
 }
