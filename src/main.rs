@@ -76,9 +76,8 @@ impl TimeClock {
         if !base_dir.exists() {
             create_dir(&base_dir).unwrap();
         }
-        let mut open_opts = OpenOptions::new();
-        open_opts.write(true).append(true);
-        let timesheet = open_opts.open(&timesheet_path).unwrap();
+        let timesheet = OpenOptions::new().write(true).append(true)
+                       .open(&timesheet_path).unwrap();
         TimeClock {
             timesheet: timesheet,
             currently_working: working_state_path.exists(),
