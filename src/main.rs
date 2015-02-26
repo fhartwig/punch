@@ -1,11 +1,12 @@
-#![feature(io, fs, std_misc, old_io, old_path, env)]
+#![feature(io, fs, std_misc, path, env)]
 
 extern crate time;
 
 use std::fs::{File, create_dir, OpenOptions, remove_file};
 use std::io::{Seek, SeekFrom, BufReader, BufReadExt, Lines, Write};
 use std::io;
-use std::old_io::fs::{PathExtensions};
+use std::path::{Path, PathBuf};
+use std::fs::PathExt;
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
 use std::time::Duration;
@@ -63,7 +64,7 @@ struct TimeClock {
     now: Tm,
     timesheet: File,
     currently_working: bool,
-    state_path: Path
+    state_path: PathBuf
 }
 
 impl TimeClock {
