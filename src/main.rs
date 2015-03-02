@@ -1,4 +1,4 @@
-#![feature(io, fs, std_misc, path)]
+#![feature(io, fs, std_misc, path, exit_status)]
 
 extern crate time;
 
