@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::fs::PathExt;
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
+use std::error::FromError;
 use std::time::Duration;
 use time::{now_utc, Tm, empty_tm, strptime};
 
@@ -16,7 +17,7 @@ fn main() {
     let result = match args().nth(1) {
         None => Err(PunchClockError::NoCommandGiven),
         Some(command) => {
-            let mut time_clock = TimeClock::new();
+            let mut time_clock = TimeClock::new().unwrap();
             match &command[..] {
                 "in" => time_clock.punch_in(),
                 "out" => time_clock.punch_out(),
@@ -33,6 +34,7 @@ fn main() {
     }
 }
 
+#[derive(Debug)]
 enum PunchClockError {
     NoCommandGiven,
     UnknownCommand,
@@ -58,6 +60,12 @@ impl fmt::Display for PunchClockError {
     }
 }
 
+impl FromError<io::Error> for PunchClockError {
+    fn from_error(err: io::Error) -> PunchClockError {
+        PunchClockError::IoError(err)
+    }
+}
+
 type PunchClockResult<T> = Result<T, PunchClockError>;
 
 struct TimeClock {
@@ -68,23 +76,23 @@ struct TimeClock {
 }
 
 impl TimeClock {
-    fn new() -> TimeClock {
+    fn new() -> PunchClockResult<TimeClock> {
         let now = now_utc();
         let home = home_dir().unwrap();
         let base_dir = home.join(Path::new(".punch"));
         let timesheet_path = base_dir.join("timesheet");
         let working_state_path = base_dir.join("state");
         if !base_dir.exists() {
-            create_dir(&base_dir).unwrap();
+            try!(create_dir(&base_dir));
         }
-        let timesheet = OpenOptions::new().write(true).append(true)
-                       .open(&timesheet_path).unwrap();
-        TimeClock {
+        let timesheet = try!(OpenOptions::new().write(true).append(true)
+                            .open(&timesheet_path));
+        Ok(TimeClock {
             timesheet: timesheet,
             currently_working: working_state_path.exists(),
             state_path: working_state_path,
             now: now
-        }
+        })
     }
 
     // commands
@@ -93,7 +101,7 @@ impl TimeClock {
         if self.currently_working {
             return Err(PunchClockError::AlreadyPunchedIn);
         }
-        self.timesheet.seek(SeekFrom::End(0)).unwrap();
+        try!(self.timesheet.seek(SeekFrom::End(0)));
         writeln!(&mut self.timesheet, "in: {}", self.now.rfc822()).unwrap();
         self.set_current_working_state(true);
         Ok(())
@@ -103,8 +111,8 @@ impl TimeClock {
         if !self.currently_working {
             return Err(PunchClockError::AlreadyPunchedOut);
         }
-        self.timesheet.seek(SeekFrom::End(0)).unwrap();
-        writeln!(&mut self.timesheet, "out: {}", self.now.rfc822()).unwrap();
+        try!(self.timesheet.seek(SeekFrom::End(0)));
+        try!(writeln!(&mut self.timesheet, "out: {}", self.now.rfc822()));
         self.set_current_working_state(false);
         Ok(())
     }
@@ -119,9 +127,8 @@ impl TimeClock {
     }
 
     fn report_daily_hours(&mut self) -> PunchClockResult<()> {
-        self.timesheet.seek(SeekFrom::Start(0)).unwrap();
-        let buf =
-            BufReader::new(File::open(self.timesheet.path().unwrap()).unwrap());
+        try!(self.timesheet.seek(SeekFrom::Start(0)));
+        let buf = BufReader::new(try!(File::open(self.timesheet.path().unwrap())));
         let mut current_day = empty_tm();
         let mut time_worked_today = Duration::zero();
 
