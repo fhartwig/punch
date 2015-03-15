@@ -1,9 +1,9 @@
-#![feature(io, std_misc, path, path_ext, file_path, exit_status)]
+#![feature(io, std_misc, path_ext, file_path, exit_status)]
 
 extern crate time;
 
 use std::fs::{File, create_dir, OpenOptions, remove_file};
-use std::io::{Seek, SeekFrom, BufReader, BufReadExt, Lines, Write};
+use std::io::{Seek, SeekFrom, BufReader, BufRead, Lines, Write};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::fs::PathExt;
