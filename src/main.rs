@@ -1,4 +1,4 @@
-#![feature(io, std_misc, path_ext, file_path, exit_status)]
+#![feature(io, path_ext, file_path, exit_status)]
 
 extern crate time;
 
@@ -10,8 +10,7 @@ use std::fs::PathExt;
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
 use std::error::FromError;
-use std::time::Duration;
-use time::{now_utc, Tm, empty_tm, strptime};
+use time::{Duration, now_utc, Tm, empty_tm, strptime};
 
 fn main() {
     let result = match args().nth(1) {
