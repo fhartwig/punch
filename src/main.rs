@@ -1,4 +1,4 @@
-#![feature(io, path_ext, file_path, exit_status)]
+#![feature(path_ext, file_path, exit_status)]
 
 extern crate time;
 
@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::fs::PathExt;
 use std::env::{args, home_dir, set_exit_status};
 use std::fmt;
-use std::error::FromError;
 use time::{Duration, now_utc, Tm, empty_tm, strptime};
 
 fn main() {
@@ -59,12 +58,11 @@ impl fmt::Display for PunchClockError {
     }
 }
 
-impl FromError<io::Error> for PunchClockError {
-    fn from_error(err: io::Error) -> PunchClockError {
+impl From<io::Error> for PunchClockError {
+    fn from(err: io::Error) -> PunchClockError {
         PunchClockError::IoError(err)
     }
 }
-
 type PunchClockResult<T> = Result<T, PunchClockError>;
 
 struct TimeClock {
