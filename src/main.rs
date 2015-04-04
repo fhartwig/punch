@@ -1,4 +1,4 @@
-#![feature(path_ext, file_path, exit_status)]
+#![feature(path_ext, exit_status)]
 
 extern crate time;
 
@@ -68,6 +68,7 @@ type PunchClockResult<T> = Result<T, PunchClockError>;
 struct TimeClock {
     now: Tm,
     timesheet: File,
+    timesheet_path: PathBuf,
     currently_working: bool,
     state_path: PathBuf
 }
@@ -86,6 +87,7 @@ impl TimeClock {
                             .open(&timesheet_path));
         Ok(TimeClock {
             timesheet: timesheet,
+            timesheet_path: timesheet_path,
             currently_working: working_state_path.exists(),
             state_path: working_state_path,
             now: now
@@ -125,7 +127,7 @@ impl TimeClock {
 
     fn report_daily_hours(&mut self) -> PunchClockResult<()> {
         try!(self.timesheet.seek(SeekFrom::Start(0)));
-        let buf = BufReader::new(try!(File::open(self.timesheet.path().unwrap())));
+        let buf = BufReader::new(try!(File::open(&self.timesheet_path)));
         let mut current_day = empty_tm();
         let mut time_worked_today = Duration::zero();
 
