@@ -1,12 +1,9 @@
-#![feature(path_ext)]
-
 extern crate time;
 
 use std::fs::{File, create_dir, OpenOptions, remove_file};
 use std::io::{Seek, SeekFrom, BufReader, BufRead, Lines, Write};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::fs::PathExt;
 use std::env::{args, home_dir};
 use std::fmt;
 use std::process::exit;
@@ -81,7 +78,7 @@ impl TimeClock {
         let base_dir = home.join(Path::new(".punch"));
         let timesheet_path = base_dir.join("timesheet");
         let working_state_path = base_dir.join("state");
-        if !base_dir.exists() {
+        if !path_exists(&base_dir) {
             try!(create_dir(&base_dir));
         }
         let timesheet = try!(OpenOptions::new().write(true).append(true)
@@ -89,7 +86,7 @@ impl TimeClock {
         Ok(TimeClock {
             timesheet: timesheet,
             timesheet_path: timesheet_path,
-            currently_working: working_state_path.exists(),
+            currently_working: path_exists(&working_state_path),
             state_path: working_state_path,
             now: now
         })
@@ -239,4 +236,8 @@ fn print_time_worked(t: &Duration, day: &Tm) {
         t.num_hours() ,
         t.num_minutes() % 60
     );
+}
+
+fn path_exists<P: AsRef<Path>>(path: P) -> bool {
+    ::std::fs::metadata(path).is_ok()
 }
