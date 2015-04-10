@@ -1,4 +1,4 @@
-#![feature(path_ext, exit_status)]
+#![feature(path_ext)]
 
 extern crate time;
 
@@ -7,8 +7,9 @@ use std::io::{Seek, SeekFrom, BufReader, BufRead, Lines, Write};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::fs::PathExt;
-use std::env::{args, home_dir, set_exit_status};
+use std::env::{args, home_dir};
 use std::fmt;
+use std::process::exit;
 use time::{Duration, now_utc, Tm, empty_tm, strptime};
 
 fn main() {
@@ -28,7 +29,7 @@ fn main() {
 
     if let Err(e) = result {
         println!("Error: {}", e);
-        set_exit_status(1);
+        exit(1);
     }
 }
 
