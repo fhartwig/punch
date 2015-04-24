@@ -4,8 +4,9 @@ Punch is a simple time tracking tool written in Rust.
 
 ## Installation
 
-To install `Punch` you will need a recent-ish (nightly) version of the rustc
-compiler and the cargo package manager. You can find these [here](http://www.rust-lang.org/install.html)
+To install `Punch` you will need the rustc compiler and the cargo package
+manager. You can find these [here](http://www.rust-lang.org/install.html).
+You should be able to use either the rust 1.0 beta or a recent nightly.
 
 Then you can build the executable by calling
 
