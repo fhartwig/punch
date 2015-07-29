@@ -61,6 +61,7 @@ impl From<io::Error> for PunchClockError {
         PunchClockError::IoError(err)
     }
 }
+
 type PunchClockResult<T> = Result<T, PunchClockError>;
 
 struct TimeClock {
@@ -82,7 +83,7 @@ impl TimeClock {
             try!(create_dir(&base_dir));
         }
         let timesheet = try!(OpenOptions::new().write(true).append(true)
-                            .open(&timesheet_path));
+                            .create(true).open(&timesheet_path));
         Ok(TimeClock {
             timesheet: timesheet,
             timesheet_path: timesheet_path,
